@@ -1,4 +1,3 @@
-/* algo version = 0.1.1_dev*/
 #include <iostream>
 #include <fstream>
 #include <stdarg.h>
@@ -46,7 +45,7 @@ bool reaction_stable_flag = false; // if judge reaction stable, its true
 int counter_ary[3][sensor_num] = {0}; // enum, if sucess threshold, +=1 
 int voting_ary[3][sensor_num] = {0}; // eunm, use for judgment each sensor sucess threshold or not, if sucess will be change 0 to 1
 float judgment_ary[judgment_row][sensor_num] = {0}; // use to save value to calculate parameter and then judgment status
-float parameters_ary[sensor_num] = {0}; // store the parameters of all sensor, then can jugde status
+float difference_rate_ary[sensor_num] = {0}; // store the parameters of all sensor, then can jugde status
 float baseline_tmp_ary[baseline_length][sensor_num] = {0};
 float baseline_avg[sensor_num] = {0};
 float rmdr_ary[sensor_num] = {0};
@@ -56,10 +55,14 @@ float r5dr_ary[sensor_num] = {0};
 float r10dr_ary[sensor_num] = {0};
 float r5s_ary[sensor_num] = {0};
 float r10s_ary[sensor_num] = {0};
+float rmdr_nor_ary[sensor_num] = {0};
+float r5dr_nor_ary[sensor_num] = {0};
+float r10dr_nor_ary[sensor_num] = {0};
 bool rmdr_flag = false;
 bool rms_flag = false;
 bool features_done = false; // if features extraction done, its true
 bool printed_feature = false; // if printed, its true
+bool printed_classifier = false;
 bool classifier_done = false; 
 /* only test use*/
 int cnter = 0;
@@ -108,17 +111,17 @@ void store_judgment_array(float sensor_value[sensor_num])
     // myprintf("\r\n");
 }
 
-// calculate each two sec data, (Rt2 - Rt1))/Rt1, and store in parameters_ary
+// calculate each two sec data, (Rt2 - Rt1))/Rt1, and store in difference_rate_ary
 void calculate_judgment_array(float sensor_value[sensor_num])
 {
     for (int i = 0; i < sensor_num; i++)
     {
-        parameters_ary[i] = (judgment_ary[1][i] - judgment_ary[0][i])/judgment_ary[0][i];
+        difference_rate_ary[i] = (judgment_ary[1][i] - judgment_ary[0][i])/judgment_ary[0][i];
     }
     // myprintf("para, ");
     // for (int i = 0; i < sensor_num; i++)
     // {
-    //     myprintf("%.5f,", parameters_ary[i]);
+    //     myprintf("%.5f,", difference_rate_ary[i]);
     // }
     // myprintf("\r\n");
 }
@@ -299,6 +302,24 @@ void print_all_feature()
     printed_feature = true;
 }
 
+
+void do_normalize(float raw_ary[sensor_num], float normalize_ary[sensor_num], FeatureShortName shortname)
+{
+    float sum = 0.0;
+    for(int i = 0; i < sensor_num; i++)
+    {
+        sum += raw_ary[i];
+    }
+    for(int k = 0; k < sensor_num; k++)
+    {
+        normalize_ary[k] = raw_ary[k]/sum;
+    }
+    for(int j = 0; j < sensor_num; j++)
+    {
+        return_info.feature_set[shortname][j] = normalize_ary[j];
+    }
+}
+
 // get all feature 
 void feature_extraction(float sensor_value[sensor_num])
 {
@@ -348,6 +369,10 @@ void feature_extraction(float sensor_value[sensor_num])
     {
         resistance_stable_difference_rate(sensor_value);
     }
+
+    do_normalize(rmdr_ary, rmdr_nor_ary, rmdr_nor);
+    do_normalize(r5dr_ary, r5dr_nor_ary, r5dr_nor);
+    do_normalize(r10dr_ary, r10dr_nor_ary, r10dr_nor);
 
 }
 
@@ -412,7 +437,7 @@ void judgment_status_and_action(float sensor_value[sensor_num])
         store_baseline_value(sensor_value);
         for (int i = 0; i < sensor_num; i++)
         {
-            if(fabs(parameters_ary[i]) <= parameter_set.threshold_array[baseline_stable][i])
+            if(fabs(difference_rate_ary[i]) <= parameter_set.threshold_array[baseline_stable][i])
             {
                 counter_ary[baseline_stable][i]++;
             }
@@ -441,7 +466,7 @@ void judgment_status_and_action(float sensor_value[sensor_num])
         store_baseline_value(sensor_value);
         for (int i = 0; i < sensor_num; i++)
         {
-            if(fabs(parameters_ary[i]) >= parameter_set.threshold_array[gas_in][i])
+            if(fabs(difference_rate_ary[i]) >= parameter_set.threshold_array[gas_in][i])
             {
                 counter_ary[gas_in][i]++;
             }
@@ -454,7 +479,7 @@ void judgment_status_and_action(float sensor_value[sensor_num])
             {
                 voting_ary[gas_in][i] = 1;
             }
-            // printf("%.5f, %.3f, ", fabs(parameters_ary[i]), parameter_set.threshold_array[gas_in][i]);
+            // printf("%.5f, %.3f, ", fabs(difference_rate_ary[i]), parameter_set.threshold_array[gas_in][i]);
             // printf("%i, %i, ", counter_ary[gas_in][i], voting_ary[gas_in][i]);
         }
         // printf("\r\n");
@@ -472,7 +497,7 @@ void judgment_status_and_action(float sensor_value[sensor_num])
         gasin_counter ++;
         for (int i = 0; i < sensor_num; i++)
         {
-            if(fabs(parameters_ary[i]) <= parameter_set.threshold_array[reaction_stable][i])
+            if(fabs(difference_rate_ary[i]) <= parameter_set.threshold_array[reaction_stable][i])
             {
                 counter_ary[reaction_stable][i]++;
             }
@@ -485,7 +510,7 @@ void judgment_status_and_action(float sensor_value[sensor_num])
             {
                 voting_ary[reaction_stable][i] = 1;
             }
-            // printf("%.5f, %.5f, ", fabs(parameters_ary[i]), parameter_set.threshold_array[gas_in][i]);
+            // printf("%.5f, %.5f, ", fabs(difference_rate_ary[i]), parameter_set.threshold_array[gas_in][i]);
             // printf("%i, %i, ", counter_ary[i], voting_ary[i]);
         }
         // printf("\r\n");
@@ -504,7 +529,6 @@ void judgment_status_and_action(float sensor_value[sensor_num])
         stable_counter++;
         if(stable_counter > parameter_set.stable_limit)
         {
-            
             features_done = true;
             if(classifier_done)
             {
@@ -553,6 +577,72 @@ void judgment_status_and_action(float sensor_value[sensor_num])
     }
 }
 
+
+void logger_message(float sensor_value[sensor_num])
+{
+        // print message on chip use for debugging
+        printf("data,status=%i,", return_info.status);
+        for (int i = 0; i < sensor_num; i++)
+        {
+                printf("%.5f,", sensor_value[i]);
+        }
+        printf("res_difference_rate,");
+        for (int k = 0; k < sensor_num; k++)
+        {
+                printf("%.5f,", difference_rate_ary[k]);
+        }
+        printf("counter_ary,");
+        if (return_info.status == 0 || return_info.status == 1 || return_info.status == 2)
+        {
+                for (int j = 0; j < sensor_num; j++)
+                {
+                        printf("%i,", counter_ary[return_info.status][j]);
+                }
+                printf("voting_ary,");
+                for (int l = 0; l < sensor_num; l++)
+                {
+                        printf("%i,", voting_ary[return_info.status][l]);
+                }
+        }
+        else
+        {
+                for (int j = 0; j < sensor_num; j++)
+                {
+                        printf("0,");
+                }
+                printf("voting_ary,");
+                for (int l = 0; l < sensor_num; l++)
+                {
+                        printf("0,");
+                }
+        }
+        printf("stable_counter,%i", stable_counter);
+        printf("purge_counter,%i", purge_counter);
+        if (features_done)
+        {
+                if (!printed_feature)
+                {
+                        printf("\n");
+                        for (int i = 0; i < feature_num; i++)
+                        {
+                                printf("features,%s,", return_info.feature_set_name[i]);
+                                for (int k = 0; k < sensor_num; k++)
+                                {
+                                        printf("%.3f, ", return_info.feature_set[i][k]);
+                                }
+                                printf("\n");
+                        }
+                        printed_feature = true;
+                }
+                if (!printed_classifier)
+                {
+                        printf("classifier,svm,%s", return_info.predict_labelname);
+                        printed_classifier = true;
+                }
+        }
+        printf("\n");
+}
+
 // entrance of algorithm return status
 int algo_return()
 {
@@ -572,6 +662,7 @@ int algo_return()
     calculate_judgment_array(sensor_value);
     judgment_status_and_action(sensor_value);
 
+    logger_message(sensor_value);
 
     return return_info.status;
 }
@@ -597,10 +688,11 @@ void algo_reset()
     rms_flag = false;
     features_done = false;
     printed_feature = false;
+    printed_classifier = false;
     classifier_done = false;
     for (int i = 0; i < sensor_num; i++)
     {
-        parameters_ary[i] = 0;
+        difference_rate_ary[i] = 0;
         baseline_avg[i] = 0;
         rmdr_ary[i] = 0;
         rsdr_ary[i] = 0;
@@ -609,7 +701,9 @@ void algo_reset()
         r10dr_ary[i] = 0;
         r5s_ary[i] = 0;
         r10s_ary[i] = 0;
-
+        rmdr_nor_ary[i] = 0;
+        r5dr_nor_ary[i] = 0;
+        r10dr_nor_ary[i] = 0;
         for (int j = 0; j < 3; j++)
         {
             counter_ary[j][i] = 0;
