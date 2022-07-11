@@ -10,13 +10,14 @@
 #include "parameters.h"
 #include "svm.h"
 #include "classifier.h"
+#include "mbed.h"
 
 using namespace std;
 
 int PMODE = 1; // 0 : debug mode, 1 : mbed mode
 ParameterSet parameter_set;
 ReturnInfo return_info;
-
+extern Serial SYS_Console;
 
 extern Sensor Sensor_S1;
 extern Sensor Sensor_S2;
@@ -32,6 +33,7 @@ extern Sensor Sensor_S11;
 extern Sensor Sensor_S12;
 extern Sensor Sensor_S13;
 extern Sensor Sensor_S14;
+extern Sensor Sensor_H1;
 
 
 
@@ -112,7 +114,7 @@ void store_judgment_array(float sensor_value[sensor_num])
 }
 
 // calculate each two sec data, (Rt2 - Rt1))/Rt1, and store in difference_rate_ary
-void calculate_judgment_array(float sensor_value[sensor_num])
+void calculate_difference_rate_ary(float sensor_value[sensor_num])
 {
     for (int i = 0; i < sensor_num; i++)
     {
@@ -308,7 +310,7 @@ void do_normalize(float raw_ary[sensor_num], float normalize_ary[sensor_num], Fe
     float sum = 0.0;
     for(int i = 0; i < sensor_num; i++)
     {
-        sum += raw_ary[i];
+        sum += fabs(raw_ary[i]);
     }
     for(int k = 0; k < sensor_num; k++)
     {
@@ -440,6 +442,10 @@ void judgment_status_and_action(float sensor_value[sensor_num])
             if(fabs(difference_rate_ary[i]) <= parameter_set.threshold_array[baseline_stable][i])
             {
                 counter_ary[baseline_stable][i]++;
+                if(counter_ary[baseline_stable][i] >= parameter_set.counter_limit)
+                {
+                    counter_ary[baseline_stable][i] = parameter_set.counter_limit; 
+                }
             }
             else
             {
@@ -469,6 +475,10 @@ void judgment_status_and_action(float sensor_value[sensor_num])
             if(fabs(difference_rate_ary[i]) >= parameter_set.threshold_array[gas_in][i])
             {
                 counter_ary[gas_in][i]++;
+                if(counter_ary[gas_in][i] >= parameter_set.counter_limit)
+                {
+                    counter_ary[gas_in][i] = parameter_set.counter_limit; 
+                }
             }
             else
             {
@@ -500,6 +510,10 @@ void judgment_status_and_action(float sensor_value[sensor_num])
             if(fabs(difference_rate_ary[i]) <= parameter_set.threshold_array[reaction_stable][i])
             {
                 counter_ary[reaction_stable][i]++;
+                if(counter_ary[reaction_stable][i] >= parameter_set.counter_limit)
+                {
+                    counter_ary[reaction_stable][i] = parameter_set.counter_limit; 
+                }
             }
             else
             {
@@ -564,7 +578,7 @@ void judgment_status_and_action(float sensor_value[sensor_num])
     {
         if(!printed_feature)
         {
-            print_all_feature();
+            // print_all_feature();
             if(!classifier_done)
             {
                 ClassifierSVM csvm;
@@ -581,66 +595,67 @@ void judgment_status_and_action(float sensor_value[sensor_num])
 void logger_message(float sensor_value[sensor_num])
 {
         // print message on chip use for debugging
-        printf("data,status=%i,", return_info.status);
+        SYS_Console.printf("data,status=%i,", return_info.status);
         for (int i = 0; i < sensor_num; i++)
         {
-                printf("%.5f,", sensor_value[i]);
+                SYS_Console.printf("%.5f,", sensor_value[i]);
         }
-        printf("res_difference_rate,");
+        SYS_Console.printf("rh,%.5f,", Sensor_H1.AFE_reading);
+        SYS_Console.printf("res_difference_rate,");
         for (int k = 0; k < sensor_num; k++)
         {
-                printf("%.5f,", difference_rate_ary[k]);
+                SYS_Console.printf("%.5f,", difference_rate_ary[k]);
         }
-        printf("counter_ary,");
+        SYS_Console.printf("counter_ary,");
         if (return_info.status == 0 || return_info.status == 1 || return_info.status == 2)
         {
                 for (int j = 0; j < sensor_num; j++)
                 {
-                        printf("%i,", counter_ary[return_info.status][j]);
+                        SYS_Console.printf("%i,", counter_ary[return_info.status][j]);
                 }
-                printf("voting_ary,");
+                SYS_Console.printf("voting_ary,");
                 for (int l = 0; l < sensor_num; l++)
                 {
-                        printf("%i,", voting_ary[return_info.status][l]);
+                        SYS_Console.printf("%i,", voting_ary[return_info.status][l]);
                 }
         }
         else
         {
                 for (int j = 0; j < sensor_num; j++)
                 {
-                        printf("0,");
+                    SYS_Console.printf("0,");
                 }
-                printf("voting_ary,");
+                SYS_Console.printf("voting_ary,");
                 for (int l = 0; l < sensor_num; l++)
                 {
-                        printf("0,");
+                    SYS_Console.printf("0,");
                 }
         }
-        printf("stable_counter,%i", stable_counter);
-        printf("purge_counter,%i", purge_counter);
+        SYS_Console.printf("stable_counter,%i", stable_counter);
+        SYS_Console.printf("purge_counter,%i", purge_counter);
+        SYS_Console.printf("\n");
         if (features_done)
         {
                 if (!printed_feature)
                 {
-                        printf("\n");
+                        SYS_Console.printf("\n");
                         for (int i = 0; i < feature_num; i++)
                         {
-                                printf("features,%s,", return_info.feature_set_name[i]);
+                                SYS_Console.printf("features,%s,", return_info.feature_set_name[i]);
                                 for (int k = 0; k < sensor_num; k++)
                                 {
-                                        printf("%.3f, ", return_info.feature_set[i][k]);
+                                        SYS_Console.printf("%.3f, ", return_info.feature_set[i][k]);
                                 }
-                                printf("\n");
+                                SYS_Console.printf("\n");
                         }
                         printed_feature = true;
                 }
-                if (!printed_classifier)
+                if (!printed_classifier && classifier_done)
                 {
-                        printf("classifier,svm,%s", return_info.predict_labelname);
+                        SYS_Console.printf("classifier,svm,%s\n", return_info.predict_labelname);
                         printed_classifier = true;
                 }
         }
-        printf("\n");
 }
 
 // entrance of algorithm return status
@@ -659,7 +674,7 @@ int algo_return()
     }
     myprintf("\n");
     store_judgment_array(sensor_value);
-    calculate_judgment_array(sensor_value);
+    calculate_difference_rate_ary(sensor_value);
     judgment_status_and_action(sensor_value);
 
     logger_message(sensor_value);

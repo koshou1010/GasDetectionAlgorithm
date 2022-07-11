@@ -8,7 +8,8 @@ enum FeatureShortName{rmdr, rsdr, rms, r5dr, r10dr, r5s, r10s, rmdr_nor, r5dr_no
 
 struct ReturnInfo
 {
-  const char *algo_version = "0.1.1";
+  const char *algo_version = "0.1.2";
+  char time_buffer[32];
   int sys_valve_status; // purge = 1, sample = 0; default = 0
   int algo_valve_status; // purge = 1, sample = 0; default = 0
   int alarm_status; // alarm = 1, no_alarm = 0; default = 0
